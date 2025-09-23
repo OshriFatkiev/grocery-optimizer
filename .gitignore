@@ -1,0 +1,45 @@
+# --- Python build / bytecode ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# --- Virtual environments ---
+venv/
+env/
+.venv/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+*.ipynb_out
+*.ipynb_save
+
+# --- Environment / secrets ---
+.env
+*.env
+
+# --- OS-specific files ---
+.DS_Store
+Thumbs.db
+
+# --- Logs / caches ---
+*.log
+*.tmp
+*.swp
+*.swo
+*.bak
+*.cache/
+.cache/
+.pytest_cache/
+
+# --- IDE / editor settings ---
+.vscode/
+.idea/
+*.iml
+
+# --- Data / output ---
+grocery_list*.yaml
+grocery_list*.csv
+grocery_list*.txt
+output/
