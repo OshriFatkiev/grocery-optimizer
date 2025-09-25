@@ -20,13 +20,14 @@ class PriceOptimizer:
       * build dict of store -> list of (item, price)
     """
 
-    def __init__(self, delay: float = 3.0) -> None:
+    def __init__(self, delay: float = 3.0, compare_to_shfsl: bool = False) -> None:
         """
         Args:
             delay: Seconds to sleep between requests to be polite.
         """
         self.scraper = SupermarketScraper()
         self.delay = delay
+        self.compare_to_shfsl = compare_to_shfsl
 
     # ------------------------------------------------------------------
     def run(self, grocery_file: str) -> Dict[str, List[List[str]]]:
@@ -42,16 +43,29 @@ class PriceOptimizer:
             items = [line.strip() for line in f if line.strip()]
 
         total = len(items)
-        for idx, item in enumerate(items, start=1):
+        for idx, item in enumerate(items, start=1):  # tqdm(items):
+            time.sleep(self.delay)  # rate-limit requests
             print(f"[{idx}/{total}]: {item}")
             best = self.scraper.best_price(item)
             if not best:
                 print(f"  No price data found for '{item}'")
                 continue
-
             store, price = best["store"], best["price"]
             results[store].append([item, price])
             print(f"  -> {store}: {price}")
+
+            time.sleep(self.delay)  # rate-limit requests
+
+            # add Shufersal price if self.compare_to_shfsl is True
+            if self.compare_to_shfsl:
+                shfsl = self.scraper.shufersal_price(item)
+                if not shfsl:
+                    print(f"  No Shufersal data found for '{item}'")
+                    continue
+                store, price = shfsl["store"], shfsl["price"]
+                results[store].append([item, price])
+                print(f"  -> {store}: {price}")
+
             time.sleep(self.delay)  # rate-limit requests
 
         return results

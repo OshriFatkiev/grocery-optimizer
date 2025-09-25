@@ -1,6 +1,6 @@
 # Grocery Optimizer
 
-A Python tool to find the cheapest supermarkets for a list of groceries.  
+A Python tool to find the cheapest supermarkets for a list of groceries.
 It scrapes prices from [chp.co.il](https://chp.co.il), optimizes for the lowest price per item, and can notify you via Telegram.
 
 ---
@@ -99,11 +99,12 @@ python main.py --formats yaml csv txt --notify
 
 ### CLI Options
 
-* `-i, --input`      Path to grocery list (default: `input/groceries.txt`)
-* `-f, --formats`    Output formats (choose one or more: yaml, csv, txt)
-* `--delay`          Seconds to wait between requests (default: 3.0)
-* `--notify`         Send results to Telegram
-* `-v, --verbose`    Enable debug logging
+* `-i, --input`              Path to grocery list (default: `input/groceries.txt`)
+* `-f, --formats`            Output formats (choose one or more: yaml, csv, txt)
+* `--delay`                  Seconds to wait between requests (default: 3.0)
+* `--notify`                 Send results to Telegram
+* `-v, --verbose`            Enable debug logging
+* `-c, --compare-to-shfsl`   Create a grocery list from Shufersal for price comparison
 
 ---
 

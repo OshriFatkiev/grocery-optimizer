@@ -5,6 +5,7 @@ Site-specific scraper for chp.co.il price comparisons.
 """
 
 from typing import Dict, List, Optional
+
 from bs4 import BeautifulSoup
 
 from .base_scraper import BaseScraper
@@ -17,13 +18,16 @@ class SupermarketScraper(BaseScraper):
     * fetch price comparison table for that barcode
     """
 
-    def __init__(self, city_id: int = 3616, street_id: int = 9000, address: str = "מעלה אדומים"):
+    def __init__(
+        self, city_id: int = 3616, street_id: int = 9000, address: str = "מעלה אדומים"
+    ):
         # Base URL isn’t required since we pass absolute URLs,
         # but you can set it if you like: base_url="https://chp.co.il"
         super().__init__()
         self.city_id = city_id
         self.street_id = street_id
         self.address = address
+        self.barcode = None
 
     # ------------------------------------------------------------------
     def find_barcode(self, item_name: str) -> Optional[str]:
@@ -39,7 +43,9 @@ class SupermarketScraper(BaseScraper):
             "shopping_address_city_id": self.city_id,
             "shopping_address_street_id": self.street_id,
         }
-        resp = self.get("https://chp.co.il/autocompletion/product_extended", params=params)
+        resp = self.get(
+            "https://chp.co.il/autocompletion/product_extended", params=params
+        )
         data = resp.json()
 
         if not data:
@@ -104,4 +110,37 @@ class SupermarketScraper(BaseScraper):
             "store": best_store_row.get("רשת"),
             "price": price,
             "raw_row": best_store_row,
+        }
+
+    # ------------------------------------------------------------------
+    def shufersal_price(self, item_name: str) -> Optional[Dict[str, str]]:
+        """
+        find the price in Shufersal for an item.
+        Returns dict with keys: 'store', 'price', 'raw_row' or None.
+        """
+        if self.barcode is None:
+            barcode = self.find_barcode(item_name)
+            if not barcode:
+                return None
+
+        rows = self.compare_prices(barcode)
+        if len(rows) < 2:
+            return None
+
+        shfsl_heb = "שופרסל"
+        shfsl_row = [row for row in rows if shfsl_heb in str(row.get("רשת"))]
+        if not shfsl_row:
+            return
+        shfsl_row = shfsl_row[0]
+
+        price = (
+            shfsl_row.get("מבצע").strip("* ").strip()
+            if shfsl_row.get("מבצע")
+            else shfsl_row.get("מחיר")
+        )
+
+        return {
+            "store": shfsl_row.get("רשת"),
+            "price": price,
+            "raw_row": shfsl_row,
         }

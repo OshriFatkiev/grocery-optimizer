@@ -11,7 +11,7 @@ import argparse
 import logging
 
 from optimizer.price_optimizer import PriceOptimizer
-from utils.exporter import export_yaml, export_csv, export_txt
+from utils.exporter import export_csv, export_txt, export_yaml
 from utils.notifier import send_telegram_message
 
 
@@ -20,33 +20,41 @@ def parse_args():
         description="Find cheapest supermarkets for a grocery list."
     )
     parser.add_argument(
-        "-i", "--input",
+        "-i",
+        "--input",
         default="input/groceries.txt",
-        help="Path to input grocery list (default: input/groceries.txt)"
+        help="Path to input grocery list (default: input/groceries.txt)",
     )
     parser.add_argument(
-        "-f", "--formats",
+        "-f",
+        "--formats",
         nargs="+",
         choices=["yaml", "csv", "txt"],
         default=["yaml"],
-        help="Output formats to save (choose one or more: yaml csv txt). Default: yaml"
+        help="Output formats to save (choose one or more: yaml csv txt). Default: yaml",
     )
     parser.add_argument(
         "--delay",
         type=float,
         default=3.0,
-        help="Seconds to wait between requests (default: 3.0)"
+        help="Seconds to wait between requests (default: 3.0)",
     )
     parser.add_argument(
         "--notify",
         action="store_true",
-        help="Send results to Telegram if BOT_TOKEN/CHAT_ID are set."
+        help="Send results to Telegram if BOT_TOKEN/CHAT_ID are set.",
     )
     parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Enable debug logging."
+        "-v", "--verbose", action="store_true", help="Enable debug logging."
     )
+
+    parser.add_argument(
+        "-c",
+        "--compare-to-shfsl",
+        action="store_true",
+        help="Create also a Shufersal list for comparison.",
+    )
+
     return parser.parse_args()
 
 
@@ -54,7 +62,7 @@ def main():
     args = parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
-    optimizer = PriceOptimizer(delay=args.delay)
+    optimizer = PriceOptimizer(delay=args.delay, compare_to_shfsl=args.compare_to_shfsl)
     results = optimizer.run(args.input)
 
     # Export to selected formats with default filenames
