@@ -29,3 +29,28 @@ def parse_price(price_str: str) -> Optional[float]:
         return float(clean)
     except ValueError:
         return None
+
+
+def all_words_hebrew(file_path: str) -> bool:
+    """
+    Check that every word in the given text file contains only Hebrew letters.
+
+    Args:
+        file_path: Path to the .txt file.
+
+    Returns:
+        True if all words are Hebrew-only, False otherwise.
+    """
+    hebrew_word_pattern = re.compile(r"^[\u0590-\u05FF]+$")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            for word in line.split():
+                # strip common punctuation from the ends
+                word_clean = word.strip(".,!?;:\"'()[]{}")
+                if word_clean and not hebrew_word_pattern.fullmatch(word_clean):
+                    print(
+                        f"Found non-Hebrew word: {word_clean}. Grocery list most contain only items in Hebrew!"
+                    )
+                    return False
+    return True

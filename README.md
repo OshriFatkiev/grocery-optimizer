@@ -26,7 +26,7 @@ It scrapes prices from [chp.co.il](https://chp.co.il), optimizes for the lowest 
 grocery\_optimizer/
 │
 ├── input/
-│   └── groceries.txt        # Your grocery list input
+│   └── groceries.txt        # Your grocery list input in Hebrew
 │
 ├── scraper/
 │   ├── __init__.py

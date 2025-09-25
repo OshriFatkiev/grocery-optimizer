@@ -13,6 +13,7 @@ import logging
 from optimizer.price_optimizer import PriceOptimizer
 from utils.exporter import export_csv, export_txt, export_yaml
 from utils.notifier import send_telegram_message
+from utils.parser import all_words_hebrew
 
 
 def parse_args():
@@ -61,6 +62,11 @@ def parse_args():
 def main():
     args = parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+
+    # Check input.txt
+    is_hebrew = all_words_hebrew(args.input)
+    if not is_hebrew:
+        return
 
     optimizer = PriceOptimizer(delay=args.delay, compare_to_shfsl=args.compare_to_shfsl)
     results = optimizer.run(args.input)
