@@ -39,6 +39,7 @@ Thumbs.db
 *.iml
 
 # --- Data / output ---
+input/
 grocery_list*.yaml
 grocery_list*.csv
 grocery_list*.txt
