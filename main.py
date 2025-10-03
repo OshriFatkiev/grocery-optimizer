@@ -11,10 +11,9 @@ import argparse
 import logging
 
 from optimizer.price_optimizer import PriceOptimizer
-from utils.convert_bycode import get_city_code
+from utils.convert_bycode import get_city_from_json
 from utils.exporter import export_csv, export_txt, export_yaml
 from utils.notifier import send_telegram_message
-from utils.parser import all_words_hebrew
 
 
 def parse_args():
@@ -32,7 +31,7 @@ def parse_args():
         "--formats",
         nargs="+",
         choices=["yaml", "csv", "txt"],
-        default=["yaml"],
+        default=None,
         help="Output formats to save (choose one or more: yaml csv txt). Default: yaml",
     )
     parser.add_argument(
@@ -54,6 +53,7 @@ def parse_args():
     parser.add_argument(
         "--compare-to-shfsl",
         action="store_true",
+        default=True,
         help="Create also a Shufersal list for comparison.",
     )
 
@@ -72,13 +72,14 @@ def main():
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
     # Check input.txt
-    is_hebrew = all_words_hebrew(args.input)
-    if not is_hebrew:
-        return
+    # is_hebrew = all_words_hebrew(args.input)
+    # if not is_hebrew:
+    #     return
 
-    city_id = get_city_code(args.city)
+    city_eng, city_id = get_city_from_json(args.city)
     if not city_id:
         return
+    print(f"Using city: {city_eng}, ID: {city_id}")
 
     optimizer = PriceOptimizer(
         delay=args.delay,
@@ -89,16 +90,17 @@ def main():
     results = optimizer.run(args.input)
 
     # Export to selected formats with default filenames
-    for fmt in args.formats:
-        if fmt == "yaml":
-            export_yaml(results)
-        elif fmt == "csv":
-            export_csv(results)
-        elif fmt == "txt":
-            export_txt(results)
+    if args.formats:
+        for fmt in args.formats:
+            if fmt == "yaml":
+                export_yaml(results)
+            elif fmt == "csv":
+                export_csv(results)
+            elif fmt == "txt":
+                export_txt(results)
 
     if args.notify:
-        send_telegram_message(results)
+        send_telegram_message(results, args.compare_to_shfsl)
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 
 
-def get_city_code(city_name, filepath="cities.json"):
+def get_city_from_json(city_name, filepath="cities.json"):
     path = Path(filepath)
 
     # Check if file exists
@@ -26,10 +26,10 @@ def get_city_code(city_name, filepath="cities.json"):
 
     # Search for the city
     for city in cities:
-        if city["name"] == city_name:
-            return city["code"]
+        if city["heb_name"] == city_name:
+            return city["eng_name"], city["code"]
 
-    return None  # If not found
+    return (None, None)  # If not found
 
 
 def parse_args():
@@ -57,10 +57,16 @@ def convert_excel_to_json(input_path, output_path):
     df = pd.read_excel(input_path)
 
     # Keep only relevant columns
-    df = df[["סמל יישוב", "שם יישוב"]]
+    df = df[["סמל יישוב", "שם יישוב באנגלית", "שם יישוב"]]
 
     # Rename for easier programmatic use
-    df = df.rename(columns={"סמל יישוב": "code", "שם יישוב": "name"})
+    df = df.rename(
+        columns={
+            "סמל יישוב": "code",
+            "שם יישוב": "heb_name",
+            "שם יישוב באנגלית": "eng_name",
+        }
+    )
 
     # Write to JSON
     df.to_json(output_path, orient="records", force_ascii=False, indent=2)
