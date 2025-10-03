@@ -67,11 +67,8 @@ cd grocery_optimizer
 2. Create a virtual environment:
 
 ```bash
-python -m venv venv
-# macOS/Linux
-source venv/bin/activate
-# Windows
-venv\Scripts\activate
+conda create -n venv python=3.13
+conda activate venv
 ```
 
 3. Install dependencies:
