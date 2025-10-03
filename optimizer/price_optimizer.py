@@ -9,6 +9,8 @@ import time
 from collections import defaultdict
 from typing import Dict, List
 
+from tqdm.auto import tqdm
+
 from scraper.supermarket_scraper import SupermarketScraper
 
 
@@ -48,17 +50,13 @@ class PriceOptimizer:
         with open(grocery_file, "r", encoding="utf-8") as f:
             items = [line.strip() for line in f if line.strip()]
 
-        total = len(items)
-        for idx, item in enumerate(items, start=1):  # tqdm(items):
-            time.sleep(self.delay)  # rate-limit requests
-            print(f"[{idx}/{total}]: {item}")
+        for item in tqdm(items, desc="Processing items", unit="item"):
+            # time.sleep(self.delay)  # rate-limit requests
             best = self.scraper.best_price(item)
             if not best:
-                print(f"  No price data found for '{item}'")
                 continue
             store, price = best["store"], best["price"]
             results[store].append([item, price])
-            print(f"  -> {store}: {price}")
 
             time.sleep(self.delay)  # rate-limit requests
 
@@ -66,11 +64,9 @@ class PriceOptimizer:
             if self.compare_to_shfsl:
                 shfsl = self.scraper.shufersal_price(item)
                 if not shfsl:
-                    print(f"  No Shufersal data found for '{item}'")
                     continue
                 store, price = shfsl["store"], shfsl["price"]
                 results[store].append([item, price])
-                print(f"  -> {store}: {price}")
 
             time.sleep(self.delay)  # rate-limit requests
 
