@@ -21,13 +21,12 @@ class SupermarketScraper(BaseScraper):
     def __init__(
         self, city_id: int = 3616, street_id: int = 9000, city: str = "מעלה אדומים"
     ):
-        # Base URL isn’t required since we pass absolute URLs,
+        # Base URL isn't required since we pass absolute URLs,
         # but you can set it if you like: base_url="https://chp.co.il"
         super().__init__()
         self.city_id = city_id
         self.street_id = street_id
         self.city = city
-        self.barcode = None
 
     # ------------------------------------------------------------------
     def find_barcode(self, item_name: str) -> Optional[str]:
@@ -87,10 +86,26 @@ class SupermarketScraper(BaseScraper):
         return stores
 
     # ------------------------------------------------------------------
-    def best_price(self, item_name: str) -> Optional[Dict[str, str]]:
+    def _extract_price(self, row: Dict[str, str]) -> str:
         """
-        Convenience helper: find the single best price for an item.
-        Returns dict with keys: 'store', 'price', 'raw_row' or None.
+        Helper to extract the actual price from a row.
+        Prioritizes sale price (מבצע) over regular price (מחיר).
+        """
+        price = (
+            row.get("מבצע").strip("* ").strip() if row.get("מבצע") else row.get("מחיר")
+        )
+        return price
+
+    # ------------------------------------------------------------------
+    def get_prices(
+        self, item_name: str
+    ) -> Optional[Dict[str, Optional[Dict[str, str]]]]:
+        """
+        Fetch all prices for an item and return both best price and Shufersal price.
+
+        Returns:
+            Dict with keys 'best' and 'shufersal', each containing:
+            {'store': str, 'price': str, 'raw_row': dict} or None
         """
         barcode = self.find_barcode(item_name)
         if not barcode:
@@ -100,47 +115,47 @@ class SupermarketScraper(BaseScraper):
         if len(rows) < 2:
             return None
 
-        best_store_row = rows[1]  # first row after headers is cheapest
-        price = (
-            best_store_row.get("מבצע").strip("* ").strip()
-            if best_store_row.get("מבצע")
-            else best_store_row.get("מחיר")
-        )
-        return {
+        # Best price (first row after headers is cheapest)
+        best_store_row = rows[1]
+        best_price = {
             "store": best_store_row.get("רשת"),
-            "price": price,
+            "price": self._extract_price(best_store_row),
             "raw_row": best_store_row,
         }
+
+        # Shufersal price
+        shfsl_heb = "שופרסל"
+        shfsl_row = next(
+            (row for row in rows if shfsl_heb in str(row.get("רשת"))), None
+        )
+
+        shufersal_price = None
+        if shfsl_row:
+            shufersal_price = {
+                "store": shfsl_row.get("רשת"),
+                "price": self._extract_price(shfsl_row),
+                "raw_row": shfsl_row,
+            }
+
+        return {
+            "best": best_price,
+            "shufersal": shufersal_price,
+        }
+
+    # ------------------------------------------------------------------
+    def best_price(self, item_name: str) -> Optional[Dict[str, str]]:
+        """
+        Convenience helper: find the single best price for an item.
+        Returns dict with keys: 'store', 'price', 'raw_row' or None.
+        """
+        result = self.get_prices(item_name)
+        return result["best"] if result else None
 
     # ------------------------------------------------------------------
     def shufersal_price(self, item_name: str) -> Optional[Dict[str, str]]:
         """
-        find the price in Shufersal for an item.
+        Convenience helper: find the price in Shufersal for an item.
         Returns dict with keys: 'store', 'price', 'raw_row' or None.
         """
-        if self.barcode is None:
-            barcode = self.find_barcode(item_name)
-            if not barcode:
-                return None
-
-        rows = self.compare_prices(city)
-        if len(rows) < 2:
-            return None
-
-        shfsl_heb = "שופרסל"
-        shfsl_row = [row for row in rows if shfsl_heb in str(row.get("רשת"))]
-        if not shfsl_row:
-            return
-        shfsl_row = shfsl_row[0]
-
-        price = (
-            shfsl_row.get("מבצע").strip("* ").strip()
-            if shfsl_row.get("מבצע")
-            else shfsl_row.get("מחיר")
-        )
-
-        return {
-            "store": shfsl_row.get("רשת"),
-            "price": price,
-            "raw_row": shfsl_row,
-        }
+        result = self.get_prices(item_name)
+        return result["shufersal"] if result else None

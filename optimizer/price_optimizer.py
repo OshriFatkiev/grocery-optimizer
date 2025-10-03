@@ -51,23 +51,24 @@ class PriceOptimizer:
             items = [line.strip() for line in f if line.strip()]
 
         for item in tqdm(items, desc="Processing items", unit="item"):
-            # time.sleep(self.delay)  # rate-limit requests
-            best = self.scraper.best_price(item)
-            if not best:
-                continue
-            store, price = best["store"], best["price"]
-            results[store].append([item, price])
-
             time.sleep(self.delay)  # rate-limit requests
 
-            # add Shufersal price if self.compare_to_shfsl is True
-            if self.compare_to_shfsl:
-                shfsl = self.scraper.shufersal_price(item)
-                if not shfsl:
-                    continue
-                store, price = shfsl["store"], shfsl["price"]
+            # Fetch all prices at once (single request)
+            prices = self.scraper.get_prices(item)
+            if not prices:
+                continue
+
+            # Add best price
+            best = prices["best"]
+            if best:
+                store, price = best["store"], best["price"]
                 results[store].append([item, price])
 
-            time.sleep(self.delay)  # rate-limit requests
+            # Add Shufersal price if requested
+            if self.compare_to_shfsl:
+                shfsl = prices["shufersal"]
+                if shfsl:
+                    store, price = shfsl["store"], shfsl["price"]
+                    results[store].append([item, price])
 
         return results
