@@ -23,30 +23,31 @@ It scrapes prices from [chp.co.il](https://chp.co.il), optimizes for the lowest 
 
 ```
 
-grocery\_optimizer/
+grocery_optimizer/
 │
 ├── input/
-│   └── groceries.txt        # Your grocery list input in Hebrew
+│   └── groceries.txt           # Your grocery list input in Hebrew
 │
 ├── scraper/
 │   ├── __init__.py
-│   ├── base\_scraper.py      # Generic HTTP/session helpers
-│   └── supermarket\_scraper.py # Logic to query chp.co.il
+│   ├── base_scraper.py         # Generic HTTP/session helpers
+│   └── supermarket_scraper.py  # Logic to query chp.co.il
 │
 ├── optimizer/
 │   ├── __init__.py
-│   └── price\_optimizer.py   # Chooses cheapest store per item
+│   └── price_optimizer.py      # Chooses cheapest store per item
 │
 ├── utils/
 │   ├── __init__.py
-│   ├── parser.py            # price parsing, text cleaning
-│   ├── exporter.py          # YAML/CSV/TXT export
-│   └── notifier.py          # Telegram bot notification
+│   ├── parser.py               # price parsing, text cleaning
+│   ├── exporter.py             # YAML/CSV/TXT export
+│   ├── notifier.py             # Telegram bot notification
+│   └── convert_bycode.py       # Convert CBS .xlsx locality codes into JSON
 │
 ├── notebooks/
-│   └── exploration.ipynb    # your current Jupyter work
+│   └── exploration.ipynb       # your current Jupyter work
 │
-├── main.py                  # entry point for CLI run
+├── main.py                     # entry point for CLI run
 ├── requirements.txt
 ├── .env
 └── .gitignore
@@ -101,7 +102,8 @@ python main.py --formats yaml csv txt --notify
 * `--delay`                  Seconds to wait between requests (default: 3.0)
 * `--notify`                 Send results to Telegram
 * `-v, --verbose`            Enable debug logging
-* `-c, --compare-to-shfsl`   Create a grocery list from Shufersal for price comparison
+* `--compare-to-shfsl`       Create a grocery list from Shufersal for price comparison
+* `--city`                   Specify the city to look up available stores in
 
 ---
 

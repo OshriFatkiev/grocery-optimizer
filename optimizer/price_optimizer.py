@@ -20,12 +20,18 @@ class PriceOptimizer:
       * build dict of store -> list of (item, price)
     """
 
-    def __init__(self, delay: float = 3.0, compare_to_shfsl: bool = False) -> None:
+    def __init__(
+        self,
+        city: str,
+        city_id: int,
+        delay: float = 3.0,
+        compare_to_shfsl: bool = False,
+    ) -> None:
         """
         Args:
             delay: Seconds to sleep between requests to be polite.
         """
-        self.scraper = SupermarketScraper()
+        self.scraper = SupermarketScraper(city=city, city_id=city_id)
         self.delay = delay
         self.compare_to_shfsl = compare_to_shfsl
 

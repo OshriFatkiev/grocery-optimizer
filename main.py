@@ -11,6 +11,7 @@ import argparse
 import logging
 
 from optimizer.price_optimizer import PriceOptimizer
+from utils.convert_bycode import get_city_code
 from utils.exporter import export_csv, export_txt, export_yaml
 from utils.notifier import send_telegram_message
 from utils.parser import all_words_hebrew
@@ -43,6 +44,7 @@ def parse_args():
     parser.add_argument(
         "--notify",
         action="store_true",
+        default=True,
         help="Send results to Telegram if BOT_TOKEN/CHAT_ID are set.",
     )
     parser.add_argument(
@@ -50,10 +52,16 @@ def parse_args():
     )
 
     parser.add_argument(
-        "-c",
         "--compare-to-shfsl",
         action="store_true",
         help="Create also a Shufersal list for comparison.",
+    )
+
+    parser.add_argument(
+        "--city",
+        type=str,
+        default="מעלה אדומים",
+        help="City name to use for store price optimization.",
     )
 
     return parser.parse_args()
@@ -68,7 +76,16 @@ def main():
     if not is_hebrew:
         return
 
-    optimizer = PriceOptimizer(delay=args.delay, compare_to_shfsl=args.compare_to_shfsl)
+    city_id = get_city_code(args.city)
+    if not city_id:
+        return
+
+    optimizer = PriceOptimizer(
+        delay=args.delay,
+        city=args.city,
+        city_id=city_id,
+        compare_to_shfsl=args.compare_to_shfsl,
+    )
     results = optimizer.run(args.input)
 
     # Export to selected formats with default filenames

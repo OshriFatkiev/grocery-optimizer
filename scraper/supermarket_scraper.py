@@ -19,14 +19,14 @@ class SupermarketScraper(BaseScraper):
     """
 
     def __init__(
-        self, city_id: int = 3616, street_id: int = 9000, address: str = "מעלה אדומים"
+        self, city_id: int = 3616, street_id: int = 9000, city: str = "מעלה אדומים"
     ):
         # Base URL isn’t required since we pass absolute URLs,
         # but you can set it if you like: base_url="https://chp.co.il"
         super().__init__()
         self.city_id = city_id
         self.street_id = street_id
-        self.address = address
+        self.city = city
         self.barcode = None
 
     # ------------------------------------------------------------------
@@ -39,7 +39,7 @@ class SupermarketScraper(BaseScraper):
             "term": item_name,
             "from": 0,
             "u": "0.5238",  # site seems to require this param; random float is okay
-            "shopping_address": self.address,
+            "shopping_address": self.city,
             "shopping_address_city_id": self.city_id,
             "shopping_address_street_id": self.street_id,
         }
@@ -63,7 +63,7 @@ class SupermarketScraper(BaseScraper):
             (e.g. {'רשת': 'Store', 'מחיר': '12.90', 'מבצע': ''}).
         """
         params = {
-            "shopping_address": self.address,
+            "shopping_address": self.city,
             "shopping_address_city_id": self.city_id,
             "shopping_address_street_id": self.street_id,
             "product_barcode": product_barcode,
@@ -123,7 +123,7 @@ class SupermarketScraper(BaseScraper):
             if not barcode:
                 return None
 
-        rows = self.compare_prices(barcode)
+        rows = self.compare_prices(city)
         if len(rows) < 2:
             return None
 

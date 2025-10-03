@@ -44,3 +44,5 @@ grocery_list*.yaml
 grocery_list*.csv
 grocery_list*.txt
 output/
+*.xlsx
+*.json
