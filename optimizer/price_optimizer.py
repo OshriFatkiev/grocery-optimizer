@@ -10,15 +10,22 @@ import math
 import time
 from collections import defaultdict
 from itertools import combinations
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 from tqdm.auto import tqdm
 
 from scraper.supermarket_scraper import SupermarketScraper
 from utils.parser import parse_price
 
-StorePrice = Tuple[str, float, str]
-ItemOptions = Tuple[str, Sequence[StorePrice]]
+
+class StoreOption(NamedTuple):
+    name: str
+    location: Optional[str]
+    price_value: float
+    price_str: str
+
+
+ItemOptions = Tuple[str, Sequence[StoreOption]]
 AssignmentEntry = Tuple[str, str, float]
 AssignmentMap = Dict[str, List[AssignmentEntry]]
 
@@ -106,7 +113,7 @@ class PriceOptimizer:
     def _collect_prices(
         self, items: Sequence[str]
     ) -> Tuple[List[ItemOptions], List[str]]:
-        price_cache: Dict[str, Tuple[StorePrice, ...]] = {}
+        price_cache: Dict[str, Tuple[StoreOption, ...]] = {}
         item_options: List[ItemOptions] = []
         missing_items: List[str] = []
 
@@ -126,24 +133,36 @@ class PriceOptimizer:
         return item_options, missing_items
 
     # ------------------------------------------------------------------
-    def _fetch_store_prices(self, item: str) -> Tuple[StorePrice, ...]:
+    def _fetch_store_prices(self, item: str) -> Tuple[StoreOption, ...]:
         prices = self.scraper.get_prices(item)
         if not prices:
             return ()
 
-        store_entries: List[StorePrice] = []
+        store_entries: List[StoreOption] = []
         for entry in prices.get("stores", []):
             store = entry.get("store")
+            location = entry.get("location")
             price_str = entry.get("price")
+            price_value = entry.get("price_value")
             if not store or not price_str:
                 continue
-            price_value = parse_price(price_str)
+            if price_value is None:
+                price_value = parse_price(price_str)
             if price_value is None:
                 continue
-            store_entries.append((store, price_value, price_str))
+            store_entries.append(StoreOption(store, location, price_value, price_str))
 
-        store_entries.sort(key=lambda value: value[1])
+        store_entries.sort(key=lambda value: value.price_value)
         return tuple(store_entries)
+
+    # ------------------------------------------------------------------
+    def _store_label(self, store_name: str, location: Optional[str]) -> str:
+        label = store_name.strip()
+        if location:
+            loc = location.strip()
+            if loc and loc not in label:
+                label = f"{label} - {loc}"
+        return label
 
     # ------------------------------------------------------------------
     def _assign_items(
@@ -175,9 +194,12 @@ class PriceOptimizer:
         for item_name, store_prices in item_options:
             if not store_prices:
                 continue
-            store, price_value, price_str = min(store_prices, key=lambda entry: entry[1])
-            assignments[store].append((item_name, price_str, price_value))
-            total_cost += price_value
+            best_option = min(store_prices, key=lambda entry: entry.price_value)
+            store_label = self._store_label(best_option.name, best_option.location)
+            assignments[store_label].append(
+                (item_name, best_option.price_str, best_option.price_value)
+            )
+            total_cost += best_option.price_value
 
         return assignments, total_cost
 
@@ -185,17 +207,23 @@ class PriceOptimizer:
     def _find_best_combination(
         self, item_options: Sequence[ItemOptions], max_stores: int
     ) -> Tuple[Optional[AssignmentMap], Optional[float]]:
-        store_names = sorted(
-            {store for _, store_prices in item_options for store, _, _ in store_prices}
+        store_labels = sorted(
+            {
+                self._store_label(option.name, option.location)
+                for _, store_prices in item_options
+                for option in store_prices
+            }
         )
-        if not store_names:
+        if not store_labels:
             return None, None
 
-        max_size = min(max_stores, len(store_names))
-        if max_size >= len(store_names):
+        max_size = min(max_stores, len(store_labels))
+        if max_size >= len(store_labels):
             return self._assign_unlimited(item_options)
 
-        combination_count = sum(math.comb(len(store_names), r) for r in range(1, max_size + 1))
+        combination_count = sum(
+            math.comb(len(store_labels), r) for r in range(1, max_size + 1)
+        )
         if combination_count > 100_000:
             logging.warning(
                 "Store limit %s creates %d combinations; using greedy assignment instead.",
@@ -208,27 +236,38 @@ class PriceOptimizer:
         best_total = float("inf")
 
         for size in range(1, max_size + 1):
-            for combo in combinations(store_names, size):
+            for combo in combinations(store_labels, size):
                 combo_set = set(combo)
                 assignment: AssignmentMap = defaultdict(list)
                 total_cost = 0.0
                 feasible = True
 
                 for item_name, store_prices in item_options:
-                    best_option: Optional[StorePrice] = None
-                    for store, price_value, price_str in store_prices:
-                        if store not in combo_set:
+                    best_option: Optional[StoreOption] = None
+                    best_label: Optional[str] = None
+                    for option in store_prices:
+                        label = self._store_label(option.name, option.location)
+                        if label not in combo_set:
                             continue
-                        if best_option is None or price_value < best_option[1]:
-                            best_option = (store, price_value, price_str)
+                        if (
+                            best_option is None
+                            or option.price_value < best_option.price_value
+                        ):
+                            best_option = option
+                            best_label = label
 
-                    if best_option is None:
+                    if best_option is None or best_label is None:
                         feasible = False
                         break
 
-                    store, price_value, price_str = best_option
-                    assignment[store].append((item_name, price_str, price_value))
-                    total_cost += price_value
+                    assignment[best_label].append(
+                        (
+                            item_name,
+                            best_option.price_str,
+                            best_option.price_value,
+                        )
+                    )
+                    total_cost += best_option.price_value
 
                     if total_cost >= best_total:
                         feasible = False
@@ -279,11 +318,13 @@ class PriceOptimizer:
         entries: List[List[str]] = []
 
         for item_name, store_prices in item_options:
-            match = next((entry for entry in store_prices if marker in entry[0]), None)
+            match = next(
+                (entry for entry in store_prices if marker in entry.name), None
+            )
             if not match:
                 continue
-            store_name = match[0]
-            entries.append([item_name, match[2]])
+            store_name = self._store_label(match.name, match.location)
+            entries.append([item_name, match.price_str])
 
         if store_name and entries and store_name not in existing_results:
             return store_name, entries

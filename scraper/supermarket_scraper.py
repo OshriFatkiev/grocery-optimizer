@@ -39,6 +39,19 @@ class SupermarketScraper(BaseScraper):
         "price",
         "cost",
     )
+    _LOCATION_HEADER_CANDIDATES = (
+        "כתובת",
+        "כתובת הסניף",
+        "כתובת מלאה",
+        "כתובת מדויקת",
+        "address",
+        "city",
+        "עיר",
+        "יישוב",
+        "ישוב",
+        "רחוב",
+        "מיקום",
+    )
 
     def __init__(
         self, city_id: int = 3616, street_id: int = 9000, city: str = "מעלה אדומים"
@@ -187,6 +200,34 @@ class SupermarketScraper(BaseScraper):
         return None
 
     # ------------------------------------------------------------------
+    def _extract_location(
+        self,
+        row: Dict[str, str],
+        headers: Sequence[str],
+        price_columns: Sequence[str],
+    ) -> Optional[str]:
+        store_header = self._select_store_header(headers)
+        for candidate in self._LOCATION_HEADER_CANDIDATES:
+            for header in headers:
+                if header == store_header:
+                    continue
+                if candidate.lower() in header.lower():
+                    value = row.get(header)
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+        for key in row.keys():
+            if key in price_columns or key == store_header:
+                continue
+            value = row.get(key)
+            if not isinstance(value, str):
+                continue
+            normalized = value.strip()
+            if not normalized or self._looks_like_price(normalized):
+                continue
+            return normalized
+        return None
+
+    # ------------------------------------------------------------------
     def _extract_price(
         self, row: Dict[str, str], price_columns: Sequence[str]
     ) -> Optional[str]:
@@ -217,7 +258,7 @@ class SupermarketScraper(BaseScraper):
             Dict with keys:
               * 'best'
               * 'shufersal'
-              * 'stores' - list of dicts with keys store/price/raw_row
+              * 'stores' - list of dicts with keys store/location/price/raw_row
         """
         barcode = self.find_barcode(item_name)
         if not barcode:
@@ -243,6 +284,8 @@ class SupermarketScraper(BaseScraper):
             if not store_name:
                 continue
 
+            location = self._extract_location(row, headers, price_columns)
+
             price_value = parse_price(price_str)
             if price_value is None:
                 continue
@@ -250,6 +293,7 @@ class SupermarketScraper(BaseScraper):
             store_entries.append(
                 {
                     "store": store_name,
+                    "location": location,
                     "price": price_str,
                     "price_value": price_value,
                     "raw_row": row,
@@ -263,6 +307,7 @@ class SupermarketScraper(BaseScraper):
         best_entry = store_entries[0]
         best_price = {
             "store": best_entry["store"],
+            "location": best_entry.get("location"),
             "price": best_entry["price"],
             "raw_row": best_entry["raw_row"],
         }
@@ -278,6 +323,7 @@ class SupermarketScraper(BaseScraper):
         shufersal_price = (
             {
                 "store": shufersal_entry["store"],
+                "location": shufersal_entry.get("location"),
                 "price": shufersal_entry["price"],
                 "price_value": shufersal_entry["price_value"],
                 "raw_row": shufersal_entry["raw_row"],
