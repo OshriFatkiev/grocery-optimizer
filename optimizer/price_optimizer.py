@@ -23,6 +23,8 @@ class StoreOption(NamedTuple):
     location: Optional[str]
     price_value: float
     price_str: str
+    product_name: Optional[str]
+    brand: Optional[str]
 
 
 ItemOptions = Tuple[str, Sequence[StoreOption]]
@@ -46,6 +48,8 @@ class PriceOptimizer:
         delay: float = 3.0,
         compare_to_shfsl: bool = False,
         max_stores: Optional[int] = None,
+        use_found_names: bool = False,
+        add_brand: bool = False,
     ) -> None:
         """
         Args:
@@ -56,6 +60,8 @@ class PriceOptimizer:
         self.delay = delay
         self.compare_to_shfsl = compare_to_shfsl
         self.max_stores = max_stores
+        self.use_found_names = use_found_names
+        self.add_brand = add_brand
         self.last_total_cost: Optional[float] = None
 
     # ------------------------------------------------------------------
@@ -144,13 +150,19 @@ class PriceOptimizer:
             location = entry.get("location")
             price_str = entry.get("price")
             price_value = entry.get("price_value")
+            product_name = entry.get("product_name") or prices.get("product_name")
+            brand = entry.get("brand")
             if not store or not price_str:
                 continue
             if price_value is None:
                 price_value = parse_price(price_str)
             if price_value is None:
                 continue
-            store_entries.append(StoreOption(store, location, price_value, price_str))
+            store_entries.append(
+                StoreOption(
+                    store, location, price_value, price_str, product_name, brand
+                )
+            )
 
         store_entries.sort(key=lambda value: value.price_value)
         return tuple(store_entries)
@@ -163,6 +175,26 @@ class PriceOptimizer:
             if loc and loc not in label:
                 label = f"{label} - {loc}"
         return label
+
+    # ------------------------------------------------------------------
+    def _compose_item_label(
+        self,
+        requested_name: str,
+        found_name: Optional[str],
+        brand: Optional[str],
+    ) -> str:
+        name = requested_name
+        if self.use_found_names and found_name:
+            cleaned = found_name.strip()
+            if cleaned:
+                name = cleaned
+        if self.add_brand and brand:
+            brand_clean = brand.strip()
+            if brand_clean:
+                brand_clean = brand_clean.rstrip(",;:،. ")
+                if brand_clean:
+                    return f"{name} ({brand_clean})"
+        return name
 
     # ------------------------------------------------------------------
     def _assign_items(
@@ -196,8 +228,11 @@ class PriceOptimizer:
                 continue
             best_option = min(store_prices, key=lambda entry: entry.price_value)
             store_label = self._store_label(best_option.name, best_option.location)
+            display_name = self._compose_item_label(
+                item_name, best_option.product_name, best_option.brand
+            )
             assignments[store_label].append(
-                (item_name, best_option.price_str, best_option.price_value)
+                (display_name, best_option.price_str, best_option.price_value)
             )
             total_cost += best_option.price_value
 
@@ -245,6 +280,7 @@ class PriceOptimizer:
                 for item_name, store_prices in item_options:
                     best_option: Optional[StoreOption] = None
                     best_label: Optional[str] = None
+                    best_display: Optional[str] = None
                     for option in store_prices:
                         label = self._store_label(option.name, option.location)
                         if label not in combo_set:
@@ -255,14 +291,22 @@ class PriceOptimizer:
                         ):
                             best_option = option
                             best_label = label
+                            best_display = self._compose_item_label(
+                                item_name, option.product_name, option.brand
+                            )
 
                     if best_option is None or best_label is None:
                         feasible = False
                         break
 
+                    display_value = best_display or self._compose_item_label(
+                        item_name,
+                        best_option.product_name,
+                        best_option.brand,
+                    )
                     assignment[best_label].append(
                         (
-                            item_name,
+                            display_value,
                             best_option.price_str,
                             best_option.price_value,
                         )
@@ -324,7 +368,10 @@ class PriceOptimizer:
             if not match:
                 continue
             store_name = self._store_label(match.name, match.location)
-            entries.append([item_name, match.price_str])
+            display_name = self._compose_item_label(
+                item_name, match.product_name, match.brand
+            )
+            entries.append([display_name, match.price_str])
 
         if store_name and entries and store_name not in existing_results:
             return store_name, entries

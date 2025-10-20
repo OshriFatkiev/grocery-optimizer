@@ -77,6 +77,16 @@ def parse_args():
         default=None,
         help="Limit the optimizer to at most this many stores.",
     )
+    parser.add_argument(
+        "--use-found-names",
+        action="store_true",
+        help="Replace item names with the product names returned by the site.",
+    )
+    parser.add_argument(
+        "--add-brand",
+        action="store_true",
+        help="Append manufacturer/brand information to item names when available.",
+    )
 
     return parser.parse_args()
 
@@ -101,6 +111,8 @@ def main():
         city_id=city_id,
         compare_to_shfsl=args.compare_to_shfsl,
         max_stores=args.max_stores,
+        use_found_names=args.use_found_names,
+        add_brand=args.add_brand,
     )
     results = optimizer.run(args.input)
     # print(results)

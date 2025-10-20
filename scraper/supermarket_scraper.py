@@ -5,7 +5,7 @@ Site-specific scraper for chp.co.il price comparisons.
 """
 
 import re
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from bs4 import BeautifulSoup
 
@@ -52,6 +52,17 @@ class SupermarketScraper(BaseScraper):
         "רחוב",
         "מיקום",
     )
+    _BRAND_HEADER_CANDIDATES = (
+        "יצרן",
+        "שם יצרן",
+        "היצרן",
+        "מותג",
+        "שם המותג",
+        "חברה",
+        "שם חברה",
+        "manufacturer",
+        "brand",
+    )
 
     def __init__(
         self, city_id: int = 3616, street_id: int = 9000, city: str = "מעלה אדומים"
@@ -64,10 +75,13 @@ class SupermarketScraper(BaseScraper):
         self.city = city
 
     # ------------------------------------------------------------------
-    def find_barcode(self, item_name: str) -> Optional[str]:
+    def find_barcode(
+        self, item_name: str
+    ) -> Optional[Tuple[str, Optional[str]]]:
         """
         Look up the product barcode for the given item name.
-        Returns None if no match is found.
+        Returns:
+            Tuple of (barcode, product_name) or None if no match is found.
         """
         params = {
             "term": item_name,
@@ -84,8 +98,42 @@ class SupermarketScraper(BaseScraper):
 
         if not data:
             return None
+
+        entry: Union[str, Dict[str, str]] = data[0]
+        if isinstance(entry, str):
+            return entry, None
+
+        barcode = entry.get("id")
+        if not barcode:
+            return None
+
+        found_name = (
+            entry.get("value")
+            or entry.get("label")
+            or entry.get("name")
+            or entry.get("text")
+        )
+
+        raw_parts = entry.get("parts") or {}
+        manufacturer_raw = raw_parts.get("manufacturer_and_barcode")
+        manufacturer = None
+        if isinstance(manufacturer_raw, str):
+            manufacturer_clean = manufacturer_raw.strip()
+            if manufacturer_clean:
+                prefix = "יצרן/מותג:"
+                if manufacturer_clean.startswith(prefix):
+                    trimmed = manufacturer_clean[len(prefix) :].strip()
+                else:
+                    trimmed = manufacturer_clean
+                for marker in ["ברקוד:", "barcode", "ת.ז.", "barcode:"]:
+                    marker_idx = trimmed.find(marker)
+                    if marker_idx != -1:
+                        trimmed = trimmed[:marker_idx].strip()
+                if trimmed:
+                    manufacturer = trimmed
+
         # First result is best match; ID looks like "product_<barcode>"
-        return data[0]["id"]
+        return barcode, found_name, manufacturer
 
     # ------------------------------------------------------------------
     def compare_prices(
@@ -228,6 +276,56 @@ class SupermarketScraper(BaseScraper):
         return None
 
     # ------------------------------------------------------------------
+    def _extract_brand(
+        self,
+        row: Dict[str, str],
+        headers: Sequence[str],
+        price_columns: Sequence[str],
+        location_value: Optional[str],
+    ) -> Optional[str]:
+        values: List[str] = []
+        seen = set()
+        store_header = self._select_store_header(headers)
+        location_headers = {
+            header
+            for header in headers
+            for candidate in self._LOCATION_HEADER_CANDIDATES
+            if candidate.lower() in header.lower()
+        }
+        normalized_location = (
+            location_value.strip().lower() if isinstance(location_value, str) else None
+        )
+
+        def add_if_valid(raw: Optional[str]) -> None:
+            if not isinstance(raw, str):
+                return
+            cleaned = raw.strip()
+            if not cleaned:
+                return
+            if self._looks_like_price(cleaned):
+                return
+            lower_cleaned = cleaned.lower()
+            if normalized_location and lower_cleaned == normalized_location:
+                return
+            if any(
+                candidate.lower() in lower_cleaned
+                for candidate in self._LOCATION_HEADER_CANDIDATES
+            ):
+                return
+            if cleaned not in seen:
+                seen.add(cleaned)
+                values.append(cleaned)
+
+        for candidate in self._BRAND_HEADER_CANDIDATES:
+            for header in headers:
+                if candidate.lower() in header.lower():
+                    if header in location_headers:
+                        continue
+                    add_if_valid(row.get(header))
+
+        return " ".join(values) if values else None
+
+    # ------------------------------------------------------------------
     def _extract_price(
         self, row: Dict[str, str], price_columns: Sequence[str]
     ) -> Optional[str]:
@@ -250,7 +348,7 @@ class SupermarketScraper(BaseScraper):
 
     def get_prices(
         self, item_name: str
-    ) -> Optional[Dict[str, Optional[Dict[str, str]]]]:
+    ) -> Optional[Dict[str, object]]:
         """
         Fetch all prices for an item and return both best price and Shufersal price.
 
@@ -259,11 +357,13 @@ class SupermarketScraper(BaseScraper):
               * 'best'
               * 'shufersal'
               * 'stores' - list of dicts with keys store/location/price/raw_row
+              * 'product_name' - canonical name found on the site (if available)
         """
-        barcode = self.find_barcode(item_name)
-        if not barcode:
+        lookup = self.find_barcode(item_name)
+        if not lookup:
             return None
 
+        barcode, product_name, manufacturer = lookup
         rows, headers = self.compare_prices(barcode)
         if not rows:
             return None
@@ -285,7 +385,9 @@ class SupermarketScraper(BaseScraper):
                 continue
 
             location = self._extract_location(row, headers, price_columns)
-
+            brand = self._extract_brand(row, headers, price_columns, location)
+            if manufacturer:
+                brand = manufacturer if not brand else f"{manufacturer} {brand}"
             price_value = parse_price(price_str)
             if price_value is None:
                 continue
@@ -294,8 +396,10 @@ class SupermarketScraper(BaseScraper):
                 {
                     "store": store_name,
                     "location": location,
+                    "brand": brand,
                     "price": price_str,
                     "price_value": price_value,
+                    "product_name": product_name,
                     "raw_row": row,
                 }
             )
@@ -308,6 +412,8 @@ class SupermarketScraper(BaseScraper):
         best_price = {
             "store": best_entry["store"],
             "location": best_entry.get("location"),
+            "brand": best_entry.get("brand"),
+            "product_name": best_entry.get("product_name", product_name),
             "price": best_entry["price"],
             "raw_row": best_entry["raw_row"],
         }
@@ -324,6 +430,10 @@ class SupermarketScraper(BaseScraper):
             {
                 "store": shufersal_entry["store"],
                 "location": shufersal_entry.get("location"),
+                "brand": shufersal_entry.get("brand"),
+                "product_name": shufersal_entry.get(
+                    "product_name", product_name
+                ),
                 "price": shufersal_entry["price"],
                 "price_value": shufersal_entry["price_value"],
                 "raw_row": shufersal_entry["raw_row"],
@@ -336,10 +446,11 @@ class SupermarketScraper(BaseScraper):
             "best": best_price,
             "shufersal": shufersal_price,
             "stores": store_entries,
+            "product_name": product_name,
         }
 
     # ------------------------------------------------------------------
-    def best_price(self, item_name: str) -> Optional[Dict[str, str]]:
+    def best_price(self, item_name: str) -> Optional[Dict[str, object]]:
         """
         Convenience helper: find the single best price for an item.
         Returns dict with keys: 'store', 'price', 'raw_row' or None.
@@ -348,7 +459,7 @@ class SupermarketScraper(BaseScraper):
         return result["best"] if result else None
 
     # ------------------------------------------------------------------
-    def shufersal_price(self, item_name: str) -> Optional[Dict[str, str]]:
+    def shufersal_price(self, item_name: str) -> Optional[Dict[str, object]]:
         """
         Convenience helper: find the price in Shufersal for an item.
         Returns dict with keys: 'store', 'price', 'raw_row' or None.
