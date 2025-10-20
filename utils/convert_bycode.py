@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Convert CBS 'bycode2023.xlsx' (locality codes) into JSON.
+Link to download: https://www.cbs.gov.il/he/publications/doclib/2019/ishuvim/bycode2023.xlsx
 
 Usage:
     python convert_bycode.py -i bycode2023.xlsx -o cities.json

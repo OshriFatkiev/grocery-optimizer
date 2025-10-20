@@ -16,6 +16,15 @@ from utils.exporter import export_csv, export_txt, export_yaml
 from utils.notifier import send_telegram_message
 
 
+def _positive_int(value: str) -> int:
+    ivalue = int(value)
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(
+            f"Invalid value '{value}'. Number of stores must be positive."
+        )
+    return ivalue
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Find cheapest supermarkets for a grocery list."
@@ -31,7 +40,7 @@ def parse_args():
         "--formats",
         nargs="+",
         choices=["yaml", "csv", "txt"],
-        default=None,
+        default=["yaml"],
         help="Output formats to save (choose one or more: yaml csv txt). Default: yaml",
     )
     parser.add_argument(
@@ -43,7 +52,6 @@ def parse_args():
     parser.add_argument(
         "--notify",
         action="store_true",
-        default=True,
         help="Send results to Telegram if BOT_TOKEN/CHAT_ID are set.",
     )
     parser.add_argument(
@@ -53,7 +61,6 @@ def parse_args():
     parser.add_argument(
         "--compare-to-shfsl",
         action="store_true",
-        default=True,
         help="Create also a Shufersal list for comparison.",
     )
 
@@ -62,6 +69,13 @@ def parse_args():
         type=str,
         default="מעלה אדומים",
         help="City name to use for store price optimization.",
+    )
+
+    parser.add_argument(
+        "--max-stores",
+        type=_positive_int,
+        default=None,
+        help="Limit the optimizer to at most this many stores.",
     )
 
     return parser.parse_args()
@@ -86,8 +100,10 @@ def main():
         city=args.city,
         city_id=city_id,
         compare_to_shfsl=args.compare_to_shfsl,
+        max_stores=args.max_stores,
     )
     results = optimizer.run(args.input)
+    # print(results)
 
     # Export to selected formats with default filenames
     if args.formats:
