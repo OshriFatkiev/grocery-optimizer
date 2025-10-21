@@ -9,9 +9,12 @@ Usage:
 
 import argparse
 import json
+import logging
 from pathlib import Path
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def get_city_from_json(city_name, filepath="cities.json"):
@@ -72,11 +75,12 @@ def convert_excel_to_json(input_path, output_path):
     # Write to JSON
     df.to_json(output_path, orient="records", force_ascii=False, indent=2)
 
-    print(f"Saved {len(df)} records to {output_path}")
+    logger.info(f"Saved {len(df)} records to {output_path}")
 
 
 def main():
     args = parse_args()
+    logging.basicConfig(level=logging.INFO)
     convert_excel_to_json(args.input, args.output)
 
 

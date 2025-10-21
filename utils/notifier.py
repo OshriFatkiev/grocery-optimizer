@@ -4,11 +4,14 @@ notifier.py
 Send grocery summary messages via Telegram bot.
 """
 
+import logging
 import os
 from typing import Dict, List
 
 import requests
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -30,7 +33,7 @@ def send_telegram_message(
     chat_id = os.getenv("CHAT_ID")
 
     if not bot_token or not chat_id:
-        print("Telegram credentials missing. Check your .env file.")
+        logger.warning("Telegram credentials missing. Check your .env file.")
         return False
 
     message_text = _format_price_table(data, compare_to_shfsl)
@@ -41,13 +44,13 @@ def send_telegram_message(
     try:
         resp = requests.post(url, data=payload, timeout=10)
         if resp.ok:
-            print("Telegram message sent successfully.")
+            logger.info("Telegram message sent successfully.")
             return True
         else:
-            print("Error sending Telegram message:", resp.text)
+            logger.error("Error sending Telegram message: %s", resp.text)
             return False
     except requests.RequestException as e:
-        print("Telegram request failed:", e)
+        logger.error(f"Telegram request failed: {e}")
         return False
 
 
@@ -160,6 +163,8 @@ def _format_price_table(
 
 if __name__ == "__main__":
     from collections import defaultdict
+
+    logging.basicConfig(level=logging.INFO)
 
     # Example usage
     data = defaultdict(list)

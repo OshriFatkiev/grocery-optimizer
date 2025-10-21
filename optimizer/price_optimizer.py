@@ -50,6 +50,7 @@ class PriceOptimizer:
         max_stores: Optional[int] = None,
         use_found_names: bool = False,
         add_brand: bool = False,
+        add_store_location: bool = False,
     ) -> None:
         """
         Args:
@@ -62,6 +63,7 @@ class PriceOptimizer:
         self.max_stores = max_stores
         self.use_found_names = use_found_names
         self.add_brand = add_brand
+        self.add_store_location = add_store_location
         self.last_total_cost: Optional[float] = None
 
     # ------------------------------------------------------------------
@@ -170,10 +172,10 @@ class PriceOptimizer:
     # ------------------------------------------------------------------
     def _store_label(self, store_name: str, location: Optional[str]) -> str:
         label = store_name.strip()
-        if location:
+        if location and self.add_store_location:
             loc = location.strip()
             if loc and loc not in label:
-                label = f"{label} - {loc}"
+                label = f"{label} ({loc})"
         return label
 
     # ------------------------------------------------------------------
@@ -206,7 +208,9 @@ class PriceOptimizer:
         if self.max_stores is None:
             return self._assign_unlimited(item_options)
 
-        assignments, total_cost = self._find_best_combination(item_options, self.max_stores)
+        assignments, total_cost = self._find_best_combination(
+            item_options, self.max_stores
+        )
         if assignments is None or total_cost is None:
             logging.warning(
                 "Unable to satisfy store limit %s. Falling back to best-per-item assignment.",
@@ -338,7 +342,9 @@ class PriceOptimizer:
             store: sum(price for _, _, price in entries)
             for store, entries in assignments.items()
         }
-        ordered_stores = sorted(assignments.keys(), key=lambda store: store_totals[store])
+        ordered_stores = sorted(
+            assignments.keys(), key=lambda store: store_totals[store]
+        )
 
         formatted: Dict[str, List[List[str]]] = {}
         for store in ordered_stores:

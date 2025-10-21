@@ -107,6 +107,7 @@ python main.py --formats yaml csv txt --notify
 * `--max-stores`             Limit the optimizer to the cheapest combination of up to N stores
 * `--use-found-names`        Replace input item names with the product names returned by the site
 * `--add-brand`              Append manufacturer/brand information to each item when available
+* `--add-store-location`     Append store locations to store names when available
 
 ---
 

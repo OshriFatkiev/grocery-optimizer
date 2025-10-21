@@ -85,15 +85,30 @@ def parse_args():
     parser.add_argument(
         "--add-brand",
         action="store_true",
+        default=True,
         help="Append manufacturer/brand information to item names when available.",
+    )
+    parser.add_argument(
+        "--add-store-location",
+        action="store_true",
+        help="Append store locations to store names when available.",
     )
 
     return parser.parse_args()
 
 
+logger = logging.getLogger(__name__)
+
+
 def main():
     args = parse_args()
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+
+    # Configure the logging system
+    LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format=LOG_FORMAT,
+    )
 
     # Check input.txt
     # is_hebrew = all_words_hebrew(args.input)
@@ -102,8 +117,9 @@ def main():
 
     city_eng, city_id = get_city_from_json(args.city)
     if not city_id:
+        logger.error(f"City '{args.city}' not found in cities.json")
         return
-    print(f"Using city: {city_eng}, ID: {city_id}")
+    logger.info(f"Using city: {city_eng} (ID: {city_id})")
 
     optimizer = PriceOptimizer(
         delay=args.delay,
@@ -113,9 +129,10 @@ def main():
         max_stores=args.max_stores,
         use_found_names=args.use_found_names,
         add_brand=args.add_brand,
+        add_store_location=args.add_store_location,
     )
     results = optimizer.run(args.input)
-    # print(results)
+    logger.debug(f"Results: {results}")
 
     # Export to selected formats with default filenames
     if args.formats:

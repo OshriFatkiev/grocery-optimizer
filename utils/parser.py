@@ -4,8 +4,11 @@ parser.py
 String cleaning and price-parsing utilities.
 """
 
+import logging
 import re
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 def clean_item_name(name: str) -> str:
@@ -49,8 +52,8 @@ def all_words_hebrew(file_path: str) -> bool:
                 # strip common punctuation from the ends
                 word_clean = word.strip(".,!?;:\"'()[]{}")
                 if word_clean and not hebrew_word_pattern.fullmatch(word_clean):
-                    print(
-                        f"Found non-Hebrew word: {word_clean}. Grocery list most contain only items in Hebrew!"
+                    logger.warning(
+                        f"Found non-Hebrew word '{word_clean}'. Grocery list must contain only items in Hebrew!"
                     )
                     return False
     return True
