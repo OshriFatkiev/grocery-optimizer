@@ -93,6 +93,16 @@ def parse_args():
         action="store_true",
         help="Append store locations to store names when available.",
     )
+    parser.add_argument(
+        "--compact-notify",
+        action="store_true",
+        help="Send a compact mobile-friendly Telegram message.",
+    )
+    parser.add_argument(
+        "--attach-full",
+        action="store_true",
+        help="Attach the full table as a .txt document in Telegram.",
+    )
 
     return parser.parse_args()
 
@@ -145,7 +155,12 @@ def main():
                 export_txt(results)
 
     if args.notify:
-        send_telegram_message(results, args.compare_to_shfsl)
+        send_telegram_message(
+            results,
+            args.compare_to_shfsl,
+            compact=args.compact_notify,
+            attach_full=args.attach_full,
+        )
 
 
 if __name__ == "__main__":

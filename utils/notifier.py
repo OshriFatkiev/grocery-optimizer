@@ -17,7 +17,10 @@ load_dotenv()
 
 
 def send_telegram_message(
-    data: Dict[str, List[List[str]]], compare_to_shfsl: bool = False
+    data: Dict[str, List[List[str]]],
+    compare_to_shfsl: bool = False,
+    compact: bool = False,
+    attach_full: bool = False,
 ) -> bool:
     """
     Send a nicely formatted grocery list to a Telegram chat.
@@ -36,22 +39,64 @@ def send_telegram_message(
         logger.warning("Telegram credentials missing. Check your .env file.")
         return False
 
-    message_text = _format_price_table(data, compare_to_shfsl)
+    # Choose formatter based on compact mode
+    message_text = (
+        _format_compact_message(data, compare_to_shfsl)
+        if compact
+        else _format_price_table(data, compare_to_shfsl)
+    )
 
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": message_text, "parse_mode": "HTML"}
 
-    try:
-        resp = requests.post(url, data=payload, timeout=10)
-        if resp.ok:
-            logger.info("Telegram message sent successfully.")
-            return True
-        else:
-            logger.error("Error sending Telegram message: %s", resp.text)
-            return False
-    except requests.RequestException as e:
-        logger.error(f"Telegram request failed: {e}")
-        return False
+    # Build message parts within Telegram limits (4096 chars)
+    parts = _chunk_message(message_text, limit=4096)
+    success = True
+    for idx, part in enumerate(parts, start=1):
+        payload = {
+            "chat_id": chat_id,
+            "text": part,
+            "parse_mode": "HTML",
+        }
+        if compact:
+            payload["disable_web_page_preview"] = True
+
+        try:
+            resp = requests.post(url, data=payload, timeout=10)
+            if resp.ok:
+                logger.info(
+                    "Telegram message part %d/%d sent successfully.", idx, len(parts)
+                )
+            else:
+                logger.error("Error sending Telegram message: %s", resp.text)
+                success = False
+        except requests.RequestException as e:
+            logger.error(f"Telegram request failed: {e}")
+            success = False
+
+    # Optionally attach full table as a text file when using compact mode
+    if compact and attach_full:
+        try:
+            full_table = _format_price_table(data, compare_to_shfsl)
+            url_doc = f"https://api.telegram.org/bot{bot_token}/sendDocument"
+            files = {
+                "document": (
+                    "grocery_report.txt",
+                    full_table.encode("utf-8"),
+                    "text/plain",
+                )
+            }
+            data_doc = {"chat_id": chat_id, "caption": "Full price table"}
+            resp = requests.post(url_doc, data=data_doc, files=files, timeout=15)
+            if resp.ok:
+                logger.info("Attached full table as a document.")
+            else:
+                logger.error("Failed to attach document: %s", resp.text)
+                success = False
+        except requests.RequestException as e:
+            logger.error(f"Telegram document upload failed: {e}")
+            success = False
+
+    return success
 
 
 def _format_price_table(
@@ -158,6 +203,97 @@ def _format_price_table(
     lines.append("\u200b")  # Using a zero-width space
 
     lines.append("</pre>")
+    return "\n".join(lines)
+
+
+def _chunk_message(text: str, limit: int = 4096) -> List[str]:
+    """Split text into parts not exceeding Telegram's message size limit."""
+    if len(text) <= limit:
+        return [text]
+
+    parts: List[str] = []
+    current: List[str] = []
+    current_len = 0
+    for line in text.splitlines():
+        # Ensure each line ends with a newline for readability
+        to_add = line + "\n"
+        if current_len + len(to_add) > limit:
+            parts.append("".join(current).rstrip("\n"))
+            current = [to_add]
+            current_len = len(to_add)
+        else:
+            current.append(to_add)
+            current_len += len(to_add)
+    if current:
+        parts.append("".join(current).rstrip("\n"))
+    return parts
+
+
+def _insert_zwsp(s: str) -> str:
+    """Insert zero-width spaces to allow wrapping on mobile UIs."""
+    return (
+        s.replace("/", "/\u200b")
+        .replace("-", "-\u200b")
+        .replace("_", "_\u200b")
+        .replace(".", ".\u200b")
+    )
+
+
+def _truncate(s: str, max_len: int = 32) -> str:
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 1] + "…"
+
+
+def _format_compact_message(
+    data: Dict[str, List[List[str]]], compare_to_shfsl: bool
+) -> str:
+    """
+    Mobile-friendly compact list layout without <pre> blocks.
+    Each line: • <b>Item</b> Store Price (Shufersal Price)
+    """
+    # Aggregate best prices similarly to the table formatter
+    item_prices = {}
+    for store, items in data.items():
+        is_shfsl = "שופרסל" in store
+        for item, price in items:
+            if item not in item_prices:
+                item_prices[item] = {
+                    "best_store": store,
+                    "best_price": price,
+                    "shfsl_price": None,
+                }
+            else:
+                if item_prices[item]["best_price"] is None or float(price) < float(
+                    item_prices[item]["best_price"]
+                ):
+                    item_prices[item]["best_price"] = price
+                    item_prices[item]["best_store"] = store
+            if is_shfsl:
+                item_prices[item]["shfsl_price"] = price
+
+    lines: List[str] = []
+    # Optional simple header
+    # lines.append("<b>Optimized Grocery List</b>")
+
+    total = len(item_prices)
+    for i, (item, details) in enumerate(item_prices.items()):
+        item_txt = _truncate(_insert_zwsp((item or "").strip()), 36)
+        store_txt = _truncate(
+            _insert_zwsp((details.get("best_store") or "N/A").strip()), 30
+        )
+        best_price = (details.get("best_price") or "N/A").strip()
+        shfsl_price = details.get("shfsl_price") or None
+
+        lines.append(f"• <b>{item_txt}</b>")
+        lines.append(f"  {store_txt} {best_price}")
+        if compare_to_shfsl and shfsl_price:
+            lines.append(f"  שופרסל {shfsl_price}")
+        if i < total - 1:
+            lines.append("")
+
+    # Prevent rendering glitches on the last line
+    lines.append("\u200b")
     return "\n".join(lines)
 
 
